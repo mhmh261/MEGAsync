@@ -45,14 +45,6 @@ TransfersWidget::TransfersWidget(QWidget* parent) :
     }
 }
 
-TransfersWidget::~TransfersWidget()
-{
-    mLoadingScene.toggleLoadingScene(false);
-    delete ui;
-    if (tDelegate) delete tDelegate;
-    if (mProxyModel) delete mProxyModel;
-}
-
 void TransfersWidget::setupTransfers()
 {
     mProxyModel = new TransfersManagerSortFilterProxyModel(ui->tvTransfers);
@@ -64,12 +56,20 @@ void TransfersWidget::setupTransfers()
     connect(mProxyModel, &TransfersManagerSortFilterProxyModel::pauseResumeTransfer, this, &TransfersWidget::onPauseResumeTransfer);
     connect(mProxyModel, &TransfersManagerSortFilterProxyModel::transferCancelClear, this, &TransfersWidget::onCancelClearButtonPressedOnDelegate);
     connect(mProxyModel, &TransfersManagerSortFilterProxyModel::transferRetry, this, &TransfersWidget::onRetryButtonPressedOnDelegate);
-    connect(app->getTransfersModel(), &TransfersModel::blockUi, this, &TransfersWidget::onUiBlocked);
-    connect(app->getTransfersModel(), &TransfersModel::unblockUi, this, &TransfersWidget::onUiUnblocked);
+    connect(&ui->tvTransfers->loadingView(), &ViewLoadingScene<TransferManagerLoadingItem, QTreeView>::sceneVisibilityChange, this, &TransfersWidget::onUiLoadingViewVisibilityChanged);
+    connect(app->getTransfersModel(), &TransfersModel::blockUi, this, &TransfersWidget::onUiBlockedRequested);
+    connect(app->getTransfersModel(), &TransfersModel::unblockUi, this, &TransfersWidget::onUiUnblockedRequested);
     connect(app->getTransfersModel(), &TransfersModel::unblockUiAndFilter, this, &TransfersWidget::onUiUnblockedAndFilter);
     connect(app->getTransfersModel(), &TransfersModel::rowsAboutToBeMoved, this, &TransfersWidget::onRowsAboutToBeMoved);
 
     configureTransferView();
+}
+
+TransfersWidget::~TransfersWidget()
+{
+    delete ui;
+    if (tDelegate) delete tDelegate;
+    if (mProxyModel) delete mProxyModel;
 }
 
 void TransfersWidget::configureTransferView()
@@ -88,7 +88,6 @@ void TransfersWidget::configureTransferView()
     ui->tvTransfers->setDragDropMode(QAbstractItemView::InternalMove);
     ui->tvTransfers->enableContextMenu();
 
-    mLoadingScene.setView(ui->tvTransfers);
     mDelegateHoverManager.setView(ui->tvTransfers);
 }
 
@@ -400,57 +399,57 @@ bool TransfersWidget::eventFilter(QObject *watched, QEvent *event)
 
 bool TransfersWidget::isLoadingViewSet()
 {
-    return mLoadingScene.isLoadingViewSet();
+    return ui->tvTransfers->loadingView().isLoadingViewSet();
 }
 
 void TransfersWidget::setScanningWidgetVisible(bool state)
 {
     mScanningIsActive = state;
 
-    if(!state && mLoadingScene.isLoadingViewSet())
+    if(!state && ui->tvTransfers->loadingView().isLoadingViewSet())
     {
         emit disableTransferManager(true);
     }
-    else if(state && mLoadingScene.isLoadingViewSet())
+    else if(state && ui->tvTransfers->loadingView().isLoadingViewSet())
     {
         emit disableTransferManager(false);
     }
 }
 
-void TransfersWidget::onUiBlocked()
+void TransfersWidget::onUiBlockedRequested()
 {
-    ui->tvTransfers->blockSignals(true);
-    ui->tvTransfers->header()->blockSignals(true);
-
-    mLoadingScene.toggleLoadingScene(true);
-
-    if(!mScanningIsActive)
-    {
-        emit disableTransferManager(true);
-    }
+    ui->tvTransfers->loadingView().toggleLoadingScene(true);
 }
 
-void TransfersWidget::onUiUnblocked()
+void TransfersWidget::onUiUnblockedRequested()
 {
-    //Set the model to the tvTransfers when the proxy model finishes filtering the first time
-    if(!ui->tvTransfers->model())
+    ui->tvTransfers->loadingView().toggleLoadingScene(false);
+}
+
+void TransfersWidget::onUiLoadingViewVisibilityChanged(bool state)
+{
+    if(!mScanningIsActive)
     {
-        ui->tvTransfers->setModel(mProxyModel);
+        emit disableTransferManager(state);
     }
 
-    ui->tvTransfers->header()->blockSignals(false);
-    ui->tvTransfers->blockSignals(false);
+    emit loadingViewVisibilityChanged(state);
 
-    mLoadingScene.toggleLoadingScene(false);
+    if(!state)
+    {
+        //Set the model to the tvTransfers when the proxy model finishes filtering the first time
+        if(!ui->tvTransfers->model())
+        {
+            ui->tvTransfers->setModel(mProxyModel);
+        }
 
-    emit disableTransferManager(false);
-
-    mModel->uiUnblocked();
+        mModel->uiUnblocked();
+    }
 }
 
 void TransfersWidget::onUiUnblockedAndFilter()
 {
-    if(mLoadingScene.isLoadingViewSet())
+    if(ui->tvTransfers->loadingView().isLoadingViewSet())
     {
         mProxyModel->refreshFilterFixedString();
     }
@@ -458,12 +457,12 @@ void TransfersWidget::onUiUnblockedAndFilter()
 
 void TransfersWidget::onModelAboutToBeChanged()
 {
-    onUiBlocked();
+    onUiBlockedRequested();
 }
 
 void TransfersWidget::onModelChanged()
 {
-    onUiUnblocked();
+    onUiUnblockedRequested();
     updateHeaders();
 
     selectAndScrollToMovedTransfer();

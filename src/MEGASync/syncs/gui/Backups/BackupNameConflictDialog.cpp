@@ -5,8 +5,10 @@
 #include "syncs/control/SyncInfo.h"
 #include "syncs/control/SyncController.h"
 #include "EventHelper.h"
-#include <QScrollBar>
+#include <DialogOpener.h>
 
+
+#include <QScrollBar>
 #include <QPushButton>
 #include <QtConcurrent/QtConcurrent>
 #include <QDesktopServices>
@@ -18,12 +20,10 @@ BackupNameConflictDialog::BackupNameConflictDialog(const QStringList& candidateP
 {
     foreach(auto& path, candidatePaths)
     {
-        mBackupNames.insert(path, SyncController::getSyncNameFromPath(path));
+        QString syncNameFromPath = SyncController::getSyncNameFromPath(path); //TODO: SNC-3324
+        mBackupNames.insert(path, syncNameFromPath.remove(Utilities::FORBIDDEN_CHARS_RX));
     }
-    setWindowFlags(windowFlags() & ~Qt::WindowContextHelpButtonHint);
     ui->setupUi(this);
-    setAttribute(Qt::WA_DeleteOnClose);
-    setModal(true);
 
     ui->scrollArea->installEventFilter(this);
     ui->scrollArea->verticalScrollBar()->installEventFilter(this);
@@ -51,10 +51,9 @@ BackupNameConflictDialog::BackupNameConflictDialog(const QStringList& candidateP
         connect(bApply, &QPushButton::clicked,
                 this, &BackupNameConflictDialog::checkChangedNames);
     }
+
     // Populate
     createWidgets();
-
-    open();
 }
 
 BackupNameConflictDialog::~BackupNameConflictDialog()
@@ -75,7 +74,8 @@ bool BackupNameConflictDialog::backupNamesValid(QStringList candidatePaths)
     while (areValid && pathIt != candidatePaths.cend())
     {
         auto name = SyncController::getSyncNameFromPath(*pathIt);
-        areValid = Utilities::isNodeNameValid(name);
+        name.remove(Utilities::FORBIDDEN_CHARS_RX);
+        //areValid = Utilities::isNodeNameValid(name); //TODO: SNC-3324
         if (areValid)
         {
             candidatesNames.insert(name);
@@ -144,6 +144,18 @@ void BackupNameConflictDialog::openLink(QString link)
 
 void BackupNameConflictDialog::createWidgets()
 {
+    //Fill with already filled names in case the dialog is open again (for example, when language is changed)
+    auto oldDialog = DialogOpener::findDialog<BackupNameConflictDialog>();
+    QMap<QString, QString> newNamesByPath;
+    if(oldDialog)
+    {
+        auto conflicts = oldDialog->getDialog()->findChildren<BackupRenameWidget*>();
+        foreach(auto conflict, conflicts)
+        {
+            newNamesByPath.insert(conflict->getPath(), conflict->getEnteredNewName());
+        }
+    }
+
     QString conflictText;
 
     // Check conflicts and add widgets
@@ -152,7 +164,7 @@ void BackupNameConflictDialog::createWidgets()
     {
         if (currentNames.contains(it.value()))
         {   // Remote conflict
-            addRenameWidget(it.key());
+            addRenameWidget(it.key(), newNamesByPath.value(it.key()));
         }
         else
         {
@@ -161,7 +173,7 @@ void BackupNameConflictDialog::createWidgets()
                 if (itIn != it && itIn.value() == it.value())
                 {
                     // Local conflict
-                    addRenameWidget(it.key());
+                    addRenameWidget(it.key(), newNamesByPath.value(it.key()));
                 }
             }
         }
@@ -205,7 +217,7 @@ void BackupNameConflictDialog::createWidgets()
     ui->lTitle->setText(tr("Rename folder", "", nbConflict));
 }
 
-void BackupNameConflictDialog::addRenameWidget(const QString& path)
+void BackupNameConflictDialog::addRenameWidget(const QString& path, const QString& suggestedNewName)
 {
     auto conflicts = ui->wConflictZone->findChildren<BackupRenameWidget*>();
     int conflictNumber = conflicts.size() + 1;
@@ -218,7 +230,7 @@ void BackupNameConflictDialog::addRenameWidget(const QString& path)
     }
 
     // Insert rename widget
-    auto conflictItem = new BackupRenameWidget(path, conflictNumber);
+    auto conflictItem = new BackupRenameWidget(path, suggestedNewName, conflictNumber);
     ui->scrollAreaLayout->addWidget(conflictItem,0, Qt::AlignTop);
     conflictItem->installEventFilter(this);
 }

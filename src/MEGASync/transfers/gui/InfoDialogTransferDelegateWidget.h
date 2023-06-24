@@ -50,6 +50,7 @@ signals:
 
 protected:
     bool eventFilter(QObject *watched, QEvent *event) override;
+    void reset() override;
 
 private slots: 
     void on_lShowInFolder_clicked();
@@ -66,9 +67,6 @@ private:
     void updateTransferCompletedOrFailed(const QExplicitlySharedDataPointer<TransferData> data);
     void updateTransferCompleting(const QExplicitlySharedDataPointer<TransferData> data);
     void updateTransferControlsOnHold(const QString& speedText);
-
-protected:
-    bool mActionButtonsEnabled;
 };
 
 #endif // INFODIALOGTRANSFERDELEGATEWIDGET_H

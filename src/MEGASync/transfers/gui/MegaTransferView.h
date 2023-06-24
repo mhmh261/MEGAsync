@@ -2,6 +2,7 @@
 #define MEGATRANSFERVIEW_H
 
 #include "TransfersWidget.h"
+#include "ViewLoadingScene.h"
 
 #include <QGraphicsEffect>
 #include <QTreeView>
@@ -10,7 +11,7 @@
 #include <QFutureWatcher>
 #include <QMessageBox>
 
-class MegaTransferView : public QTreeView
+class MegaTransferView : public LoadingSceneView<TransferManagerLoadingItem, QTreeView>
 {
     Q_OBJECT
 
@@ -90,6 +91,7 @@ protected:
     void keyPressEvent(QKeyEvent *event) override;
     void selectionChanged(const QItemSelection &selected, const QItemSelection &deselected) override;
     bool eventFilter(QObject *object, QEvent *event) override;
+    void paintEvent(QPaintEvent *event) override;
 
 private slots:
     void onCustomContextMenu(const QPoint& point);

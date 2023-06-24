@@ -54,6 +54,7 @@ public:
 
     virtual void onRequestFinish(mega::MegaApi *api, mega::MegaRequest *request, mega::MegaError *e) = 0;
     virtual void requestAttribute()= 0;
+    void forceRequestAttribute() const;
     virtual bool isAttributeReady() const = 0;
     virtual RequestInfo fillRequestInfo() = 0;
     bool attributeRequestNeedsRetry(int attribute) const;
@@ -85,12 +86,12 @@ public:
         QString userEmail = QString::fromUtf8(user_email);
         QString mapKey = getKey(userEmail);
 
-        auto classType = typeid(AttributeClass).name();
+        auto classType = QString::fromUtf8(AttributeClass::staticMetaObject.className());
 
         auto userRequests = mRequests.values(mapKey);
         foreach(auto& request, userRequests)
         {
-            auto requestType = typeid(*request).name();
+            auto requestType = QString::fromUtf8(request->metaObject()->className());
             if(requestType == classType)
             {
                 foreach(auto paramType, request->getRequestInfo().mParamInfo.keys())
@@ -109,10 +110,16 @@ public:
         return request;
     }
 
+    void updateEmptyAttributesByUser(const char* user_email);
+
+private:
+    friend class AttributeRequest;
+
     void onRequestFinish(mega::MegaApi *api, mega::MegaRequest *incoming_request, mega::MegaError *e) override;
     void onUsersUpdate(mega::MegaApi *, mega::MegaUserList *users) override;
 
-private:
+    void forceRequestAttribute(const AttributeRequest*) const;
+
     explicit UserAttributesManager();
     QString getKey(const QString& userEmail) const;
 

@@ -4,6 +4,8 @@ INCLUDEPATH += $$PWD
 QT       += network
 
 SOURCES += $$PWD/HTTPServer.cpp \
+    $$PWD/DialogOpener.cpp \
+    $$PWD/DownloadQueueController.cpp \
     $$PWD/Preferences.cpp \
     $$PWD/LinkProcessor.cpp \
     $$PWD/MegaUploader.cpp \
@@ -24,6 +26,8 @@ SOURCES += $$PWD/HTTPServer.cpp \
 
 HEADERS  +=  $$PWD/HTTPServer.h \
     $$PWD/AppStatsEvents.h \
+    $$PWD/DialogOpener.h \
+    $$PWD/DownloadQueueController.h \
     $$PWD/Preferences.h \
     $$PWD/LinkProcessor.h \
     $$PWD/MegaUploader.h \

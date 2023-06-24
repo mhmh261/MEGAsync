@@ -65,7 +65,7 @@ public slots:
         bool result(false);
 
 #ifdef USE_DBUS
-        //This check is not neccesary, but just in case...this slot is only called when the boolean is true       
+        //This check is not neccesary, but just in case...this slot is only called when the boolean is true
         QDBusConnection bus = QDBusConnection::sessionBus();
 
         if(bus.isConnected())
@@ -107,14 +107,14 @@ public slots:
     }
 
 private:
+#ifdef USE_DBUS
     bool runForGnome(const QDBusConnection& bus)
     {
         auto result(false);
 
-#ifdef USE_DBUS
         QDBusInterface sessionManagerInterface(
                     GNOME_SERVICE, GNOME_PATH,
-                    GNOME_SERVICE, bus, this);
+                    GNOME_SERVICE, bus);
         if (sessionManagerInterface.isValid())
         {
             //By default 0
@@ -147,50 +147,50 @@ private:
                 log(sessionManagerInterface.interface(),QString(QLatin1String("Uninhibiting")), replyToUnInhibit);
             }
         }
-#endif
 
         return result;
     }
+#endif
 
+#ifdef USE_DBUS
     bool runForFreedesktopScreenSaver(const QDBusConnection& bus)
     {
         auto result(false);
 
-#ifdef USE_DBUS
         QDBusInterface screenSaverInterface(
                     FREEDESKTOP_SCREENSAVER_SERVICE, FREEDESKTOP_SCREENSAVER_PATH,
-                    FREEDESKTOP_SCREENSAVER_SERVICE, bus, this);
+                    FREEDESKTOP_SCREENSAVER_SERVICE, bus);
         if (screenSaverInterface.isValid())
         {
             result = runForFreeDesktop(screenSaverInterface);
         }
-#endif
 
         return result;
     }
+#endif
 
+#ifdef USE_DBUS
     bool runForFreedesktopPowerManagement(const QDBusConnection& bus)
     {
         auto result(false);
 
-#ifdef USE_DBUS
         QDBusInterface powerManagementInterface(
                     FREEDESKTOP_POWERMANAGEMENT_SERVICE, FREEDESKTOP_POWERMANAGEMENT_PATH,
-                    FREEDESKTOP_POWERMANAGEMENT_SERVICE, bus, this);
+                    FREEDESKTOP_POWERMANAGEMENT_SERVICE, bus);
         if (powerManagementInterface.isValid())
         {
             result = runForFreeDesktop(powerManagementInterface);
         }
-#endif
 
         return result;
     }
+#endif
 
+#ifdef USE_DBUS
     bool runForFreeDesktop(QDBusInterface& interface)
     {
         bool result(false);
 
-#ifdef USE_DBUS
         if(mKeepPCAwakeState)
         {
             QDBusReply<uint> replyToInhibit = interface.call(
@@ -217,19 +217,19 @@ private:
 
             log(interface.interface(),QString(QLatin1String("Uninhibiting")), replyToUnInhibit);
         }
-#endif
 
         return result;
     }
+#endif
 
+#ifdef USE_DBUS
     bool runForSystemD(const QDBusConnection& bus)
     {
         bool result(false);
 
-#ifdef USE_DBUS
         QDBusInterface systemDInterface(
                     FREEDESKTOP_SYSTEMD_SERVICE, FREEDESKTOP_SYSTEMD_PATH,
-                    FREEDESKTOP_SYSTEMD_IFACE, bus, this);
+                    FREEDESKTOP_SYSTEMD_IFACE, bus);
         if (systemDInterface.isValid())
         {
             if(mKeepPCAwakeState)
@@ -258,23 +258,26 @@ private:
                 }
             }
         }
-#endif
 
         return result;
     }
+#endif
 
+#ifdef USE_DBUS
     template <class ReturnType>
-    void log(const QString& service, const QString operation, const QDBusReply<ReturnType>& reply)
+    void log(const QString& service, const QString operation
+             ,const QDBusReply<ReturnType>& reply)
     {
         if(reply.isValid())
         {
-            mega::MegaApi::log(mega::MegaApi::LOG_LEVEL_DEBUG, QString(QLatin1String("Service %1. Sleep settings: %1 sleep mode OK.")).arg(service, operation).toUtf8().constData());
+            mega::MegaApi::log(mega::MegaApi::LOG_LEVEL_DEBUG, QString(QLatin1String("Service %1. Sleep settings: %2 sleep mode OK.")).arg(service, operation).toUtf8().constData());
         }
         else
         {
-            mega::MegaApi::log(mega::MegaApi::LOG_LEVEL_DEBUG, QString(QLatin1String("Service %1. Sleep settings: %1 sleep mode failed: %2")).arg(service, operation, reply.error().message()).toUtf8().constData());
+            mega::MegaApi::log(mega::MegaApi::LOG_LEVEL_DEBUG, QString(QLatin1String("Service %1. Sleep settings: %2 sleep mode failed: %3")).arg(service, operation, reply.error().message()).toUtf8().constData());
         }
     }
+#endif
 
 private:
     bool mKeepPCAwakeState;
@@ -284,15 +287,30 @@ private:
 
 // CLASS POWEROPTIONS
 
-std::unique_ptr<PowerOptionsImpl> PowerOptions::mPowerOptionsImpl = mega::make_unique<PowerOptionsImpl>();
+std::unique_ptr<PowerOptionsImpl> PowerOptions::mPowerOptionsImpl = nullptr;
 
 PowerOptions::PowerOptions()
-{}
+{
+    if(!mPowerOptionsImpl)
+    {
+        mPowerOptionsImpl = mega::make_unique<PowerOptionsImpl>();
+    }
+}
 
 PowerOptions::~PowerOptions()
 {}
 
 bool PowerOptions::keepAwake(bool state)
 {
-    return mPowerOptionsImpl->changeKeepPCAwakeState(state);
+    return mPowerOptionsImpl ? mPowerOptionsImpl->changeKeepPCAwakeState(state) : false;
+}
+
+void PowerOptions::appShutdown()
+{
+    // singletons are trouble.
+    // global objects deletion order in different compilation units cannot be predicted.
+    // delete this unpredictable singleton thing before it causes a shutdown crash
+    // as it will try to log some messages on destruction.
+    // And logging may (will) already have been destroyed (as it uses global objects too).
+    mPowerOptionsImpl.reset();
 }
